@@ -33,7 +33,6 @@ from invenio.modules.accounts.models import User, Usergroup
 from sqlalchemy.ext.associationproxy import association_proxy
 from flask.ext.login import current_user
 from invenio.utils.date import convert_datestruct_to_datetext
-from invenio.modules.messages.api import check_if_user_has_free_space
 
 
 class MsgMESSAGE(db.Model):
@@ -118,7 +117,7 @@ class MsgMESSAGE(db.Model):
             for u in User.query.filter(User.nickname.
                                        in_(to_add)).all():
                 if u not in self.recipients and \
-                   check_if_user_has_free_space(u.id) is True:
+                   has_free_space(u.id) is True:
                     self.recipients.append(u)
 
     @sent_to_group_names.setter
@@ -299,6 +298,11 @@ def get_nicks_from_uids(uids):
         if u is not None:
             users[int(uid)] = u.nickname
     return users
+
+
+def has_free_space(uid):
+    from invenio.modules.messages.api import check_if_user_has_free_space
+    return check_if_user_has_free_space(uid)
 
 
 class UserMsgMESSAGE(db.Model):
