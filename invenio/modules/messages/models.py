@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 ## This file is part of Invenio.
-## Copyright (C) 2011, 2012, 2014 CERN.
+## Copyright (C) 2011, 2012, 2013, 2014 CERN.
 ##
 ## Invenio is free software; you can redistribute it and/or
 ## modify it under the terms of the GNU General Public License as
@@ -40,27 +40,25 @@ from invenio.modules.messages.api import check_if_user_has_free_space
 class MsgMESSAGE(db.Model):
     """Represents a MsgMESSAGE record."""
     def __str__(self):
-        return \
-            "From: %s<%s>, Subject: <%s> %s" % (
-                self.user_from.nickname or
-                ('None'), self.user_from.email or
-                ('unknown'), self.subject, self.body)
+        return "From: %s<%s>, Subject: <%s> %s" % \
+            (self.user_from.nickname or ('None'),
+             self.user_from.email or ('unknown'),
+             self.subject, self.body)
     __tablename__ = 'msgMESSAGE'
-    id = db.Column(db.Integer(15, unsigned=True),
-                   nullable=False, primary_key=True, autoincrement=True)
+    id = db.Column(db.Integer(15, unsigned=True), nullable=False,
+                   primary_key=True,
+                   autoincrement=True)
     id_user_from = db.Column(db.Integer(15, unsigned=True),
                              db.ForeignKey(User.id),
                              nullable=True, server_default='0')
-    _sent_to_user_nicks = db.Column(db.Text,
-                                    name='sent_to_user_nicks', nullable=False)
-    _sent_to_group_names = db.Column(db.Text,
-                                     name='sent_to_group_names',
+    _sent_to_user_nicks = db.Column(db.Text, name='sent_to_user_nicks',
+                                    nullable=False)
+    _sent_to_group_names = db.Column(db.Text, name='sent_to_group_names',
                                      nullable=False)
     subject = db.Column(db.Text, nullable=False)
     body = db.Column(db.Text, nullable=True)
-    sent_date = \
-        db.Column(db.DateTime, nullable=False,
-                  server_default='1900-01-01 00:00:00')    # db.func.now() -> 'NOW()'
+    sent_date = db.Column(db.DateTime, nullable=False,
+                          server_default='1900-01-01 00:00:00')     # db.func.now() -> 'NOW()'
     received_date = db.Column(db.DateTime,
                               server_default='1900-01-01 00:00:00')
     user_from = db.relationship(User, backref='sent_messages')
@@ -68,7 +66,97 @@ class MsgMESSAGE(db.Model):
     #                             secondary=lambda: UserMsgMESSAGE.__table__,
     #                             collection_class=set)
 
-    recipients = association_proxy('sent_to_users', 'user_to', creator=lambda u: UserMsgMESSAGE(user_to=u))
+    recipients = association_proxy('sent_to_users', 'user_to',
+                                   creator=lambda u: UserMsgMESSAGE(user_to=u))
+
+    @db.hybrid_property
+    def sent_to_user_nicks(self):
+        """ Alias for column 'sent_to_user_nicks'. """
+        return self._sent_to_user_nicks
+
+    @db.hybrid_property
+    def sent_to_group_names(self):
+        """ Alias for column 'sent_to_group_names'. """
+        return self._sent_to_group_names
+
+    @db.validates('_sent_to_user_nicks')
+    def validate_sent_to_user_nicks(self, key, value):
+        user_nicks = filter(len, map(strip,
+                                     value.split(cfg['CFG_WEBMESSAGE_SEPARATOR'])))
+        assert len(user_nicks) == len(set(user_nicks))
+        if len(user_nicks) > 0:
+            assert len(user_nicks) == \
+                User.query.filter(User.nickname.in_(user_nicks)).count()
+        return cfg['CFG_WEBMESSAGE_SEPARATOR'].join(user_nicks)
+
+    @db.validates('_sent_to_group_names')
+    def validate_sent_to_group_names(self, key, value):
+        group_names = filter(len, map(strip,
+                                      value.split(cfg['CFG_WEBMESSAGE_SEPARATOR'])))
+        assert len(group_names) == len(set(group_names))
+        if len(group_names) > 0:
+            assert len(group_names) == \
+                Usergroup.query.filter(Usergroup.name.in_(group_names)).count()
+        return cfg['CFG_WEBMESSAGE_SEPARATOR'].join(group_names)
+
+    @sent_to_user_nicks.setter
+    def sent_to_user_nicks(self, value):
+        old_user_nicks = self.user_nicks
+        self._sent_to_user_nicks = value
+        to_add = set(self.user_nicks)-set(old_user_nicks)
+        to_del = set(old_user_nicks)-set(self.user_nicks)
+        if len(self.group_names):
+            to_del = to_del-set([u.nickname for u in User.query.
+                                 join(User.usergroups).
+                                 filter(Usergroup.name.in_(self.group_names)).
+                                 all()])
+        if len(to_del):
+            is_to_del = lambda u: u.nickname in to_del
+            remove_old = filter(is_to_del, self.recipients)
+            for u in remove_old:
+                self.recipients.remove(u)
+        if len(to_add):
+            for u in User.query.filter(User.nickname.
+                                       in_(to_add)).all():
+                if u not in self.recipients and \
+                   check_if_user_has_free_space(u.id) is True:
+                    self.recipients.append(u)
+
+    @sent_to_group_names.setter
+    def sent_to_group_names(self, value):
+        old_group_names = self.group_names
+        self._sent_to_group_names = value
+        groups_to_add = set(self.group_names)-set(old_group_names)
+        groups_to_del = set(old_group_names)-set(self.group_names)
+        if len(groups_to_del):
+            to_del = set([u.nickname for u in User.query.
+                          join(User.usergroups).
+                          filter(Usergroup.name.in_(groups_to_del)).
+                          all()])-set(self.user_nicks)
+            is_to_del = lambda u: u.nickname in to_del
+            remove_old = filter(is_to_del, self.recipients)
+            for u in remove_old:
+                self.recipients.remove(u)
+        if len(groups_to_add):
+            for u in User.query.join(User.usergroups).filter(db.and_(
+                                                             Usergroup.name.in_(groups_to_add),
+                                                             db.not_(User.nickname.in_(self.user_nicks)))).all():
+                if u not in self.recipients:
+                    self.recipients.append(u)
+
+    @property
+    def user_nicks(self):
+        if not self._sent_to_user_nicks:
+            return []
+        return filter(len, map(strip,
+                               self._sent_to_user_nicks.split(cfg['CFG_WEBMESSAGE_SEPARATOR'])))
+
+    @property
+    def group_names(self):
+        if not self._sent_to_group_names:
+            return []
+        return filter(len, map(strip,
+                               self.sent_to_group_names.split(cfg['CFG_WEBMESSAGE_SEPARATOR'])))
 
     def send(self):
         """Sends this message to the recipients that are set.
@@ -148,95 +236,6 @@ class MsgMESSAGE(db.Model):
         #send the new_message
         new_message.send()
 
-    @db.hybrid_property
-    def sent_to_user_nicks(self):
-        """ Alias for column 'sent_to_user_nicks'. """
-        return self._sent_to_user_nicks
-
-    @db.hybrid_property
-    def sent_to_group_names(self):
-        """ Alias for column 'sent_to_group_names'. """
-        return self._sent_to_group_names
-
-    @db.validates('_sent_to_user_nicks')
-    def validate_sent_to_user_nicks(self, key, value):
-        user_nicks = filter(len, map(strip,
-                            value.split(cfg['CFG_WEBMESSAGE_SEPARATOR'])))
-        assert len(user_nicks) == len(set(user_nicks))
-        if len(user_nicks) > 0:
-            assert len(user_nicks) == \
-                User.query.filter(User.nickname.in_(user_nicks)).count()
-        return cfg['CFG_WEBMESSAGE_SEPARATOR'].join(user_nicks)
-
-    @db.validates('_sent_to_group_names')
-    def validate_sent_to_group_names(self, key, value):
-        group_names = filter(len, map(strip,
-                             value.split(cfg['CFG_WEBMESSAGE_SEPARATOR'])))
-        assert len(group_names) == len(set(group_names))
-        if len(group_names) > 0:
-            assert len(group_names) == \
-                Usergroup.query.filter(Usergroup.name.in_(group_names)).count()
-        return cfg['CFG_WEBMESSAGE_SEPARATOR'].join(group_names)
-
-    @sent_to_user_nicks.setter
-    def sent_to_user_nicks(self, value):
-        old_user_nicks = self.user_nicks
-        self._sent_to_user_nicks = value
-        to_add = set(self.user_nicks)-set(old_user_nicks)
-        to_del = set(old_user_nicks)-set(self.user_nicks)
-        if len(self.group_names):
-            to_del = to_del-set([u.nickname for u in User.query.
-                                 join(User.usergroups).
-                                 filter(Usergroup.name.in_(self.group_names)).
-                                 all()])
-        if len(to_del):
-            is_to_del = lambda u: u.nickname in to_del
-            remove_old = filter(is_to_del, self.recipients)
-            for u in remove_old:
-                self.recipients.remove(u)
-        if len(to_add):
-            for u in User.query.filter(User.nickname.
-                                       in_(to_add)).all():
-                # add u to recipients if his mailbox has free space
-                if u not in self.recipients and \
-                   check_if_user_has_free_space(u.id) is True:
-                    self.recipients.append(u)
-
-    @sent_to_group_names.setter
-    def sent_to_group_names(self, value):
-        old_group_names = self.group_names
-        self._sent_to_group_names = value
-        groups_to_add = set(self.group_names)-set(old_group_names)
-        groups_to_del = set(old_group_names)-set(self.group_names)
-        if len(groups_to_del):
-            to_del = set([u.nickname for u in User.query.
-                          join(User.usergroups).
-                          filter(Usergroup.name.in_(groups_to_del)).
-                          all()])-set(self.user_nicks)
-            is_to_del = lambda u: u.nickname in to_del
-            remove_old = filter(is_to_del, self.recipients)
-            for u in remove_old:
-                self.recipients.remove(u)
-        if len(groups_to_add):
-            for u in User.query.join(User.usergroups).filter(db.and_(
-                                                             Usergroup.name.in_(groups_to_add),
-                                                             db.not_(User.nickname.in_(self.user_nicks)))).all():
-                if u not in self.recipients:
-                    self.recipients.append(u)
-
-    @property
-    def user_nicks(self):
-        if not self._sent_to_user_nicks:
-            return []
-        return filter(len, map(strip,
-                               self._sent_to_user_nicks.split(cfg['CFG_WEBMESSAGE_SEPARATOR'])))
-
-    @property
-    def group_names(self):
-        if not self._sent_to_group_names:
-            return []
-        return filter(len, map(strip,
-                               self.sent_to_group_names.split(cfg['CFG_WEBMESSAGE_SEPARATOR'])))
 
 #TODO consider moving following lines to separate file.
 
@@ -251,25 +250,25 @@ def email_alert(mapper, connection, target):
     from invenio.ext.template import render_template_to_string
     from invenio.ext.email import send_email, scheduled_send_email
     m = target
-    is_reminder = \
-        m.received_date is not None and m.received_date > datetime.now()
+    is_reminder = (m.received_date is not None and
+                   m.received_date > datetime.now())
 
     alert = send_email
     if is_reminder:
-        alert = \
-            lambda *args, **kwargs: scheduled_send_email(
-                *args, other_bibtasklet_arguments=[m.received_date.strftime(
-                    datetext_format)], **kwargs)
+        alert = (lambda *args, **kwargs: scheduled_send_email(*args,
+                 other_bibtasklet_arguments=[m.received_date.strftime(datetext_format)], **kwargs))
 
     for u in m.recipients:
-        if isinstance(u.settings, dict) and u.settings.get('webmessage_email_alert', True):
+        if isinstance(u.settings, dict) and \
+           u.settings.get('webmessage_email_alert', True):
             try:
                 alert(
                     cfg['CFG_WEBCOMMENT_ALERT_ENGINE_EMAIL'],
-                    u.email,
-                    subject=m.subject,
-                    content=render_template_to_string('messages/email_alert.html',
-                                                      message=m, user=u))
+                    u.email, subject=m.subject,
+                    content=render_template_to_string(
+                        'messages/email_alert.html', message=m,
+                        user=u)
+                )
             except:
                 # FIXME tests are not in request context
                 pass
