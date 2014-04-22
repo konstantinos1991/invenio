@@ -87,7 +87,6 @@ class MessageResource(Resource):
         replies to a message
         :param msg_id: the id of the message to reply to
         """
-
         pass
 
     def head(self, message_id):
