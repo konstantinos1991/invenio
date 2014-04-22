@@ -76,21 +76,21 @@ def user_exists(uid):
 #     return groups
 
 
-# def get_nicks_from_uids(uids):
-#     """
-#     **REFACTORED
-#     Get the association uid/nickname of given uids
-#     @param uids: list or sequence of uids
-#     @return: a dictionary {uid: nickname} where empty value is possible
-#     """
-#     if not((type(uids) is list) or (type(uids) is tuple)):
-#         uids = [uids]
-#     users = {}
-#     for uid in uids:
-#         u = User.query.filter_by(id=uid).first()
-#         if u is not None:
-#             users[int(uid)] = u.nickname
-#     return users
+def get_nicks_from_uids(uids):
+    """
+    **REFACTORED
+    Get the association uid/nickname of given uids
+    @param uids: list or sequence of uids
+    @return: a dictionary {uid: nickname} where empty value is possible
+    """
+    if not((type(uids) is list) or (type(uids) is tuple)):
+        uids = [uids]
+    users = {}
+    for uid in uids:
+        u = User.query.filter_by(id=uid).first()
+        if u is not None:
+            users[int(uid)] = u.nickname
+    return users
 
 
 def get_uids_from_emails(emails):

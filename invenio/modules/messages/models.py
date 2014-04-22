@@ -179,7 +179,7 @@ class MsgMESSAGE(db.Model):
         #add the id of the sender to a list
         uids.append(self.id_user_from)
         #get pairs in the form(uid,nickname)
-        uids_nicknames_dictionary = get_nicks_from_uids(uids)
+        uids_nicknames_dictionary = nicks_from_uids(uids)
         #get sender's nickname from the dictionary
         old_sender_nickname = uids_nicknames_dictionary[self.id_user_from]
         nicknames_to = ""
@@ -208,14 +208,14 @@ class MsgMESSAGE(db.Model):
         #add the id of the sender to a list
         uids.append(self.id_user_from)
         #get pairs in the form(uid,nickname)
-        uids_nicknames_dictionary = get_nicks_from_uids(uids)
+        uids_nicknames_dictionary = nicks_from_uids(uids)
         #get sender's nickname from the dictionary
         old_sender_nickname = uids_nicknames_dictionary[self.id_user_from]
         #get the nickname of the user with user_id that replies to the message
         uids[:] = []    # empty uids list
         uids.append(user_id)
         uids_nicknames_dictionary.clear()   # empty the dictionary
-        uids_nicknames_dictionary = get_nicks_from_uids(uids)
+        uids_nicknames_dictionary = nicks_from_uids(uids)
         user_nickname_that_replies = uids_nicknames_dictionary[user_id]
         #get the nicknames of the other recipients but remove first the nickname of the user that is now replying back to the email
         nicknames_to_list = self._sent_to_user_nicks.split(cfg['CFG_WEBMESSAGE_SEPARATOR'])
@@ -283,21 +283,15 @@ def email_alert_register():
         event.listen(MsgMESSAGE, 'after_insert', email_alert)
 
 
-def get_nicks_from_uids(uids):
+def nicks_from_uids(uids):
     """
     **REFACTORED
     Get the association uid/nickname of given uids
     @param uids: list or sequence of uids
     @return: a dictionary {uid: nickname} where empty value is possible
     """
-    if not((type(uids) is list) or (type(uids) is tuple)):
-        uids = [uids]
-    users = {}
-    for uid in uids:
-        u = User.query.filter_by(id=uid).first()
-        if u is not None:
-            users[int(uid)] = u.nickname
-    return users
+    from invenio.modules.messages.util import get_nicks_from_uids
+    return get_nicks_from_uids(uids)
 
 
 def has_free_space(uid):
