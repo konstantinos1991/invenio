@@ -23,8 +23,8 @@ Restful api for the messages module.
 from flask.ext.restful import abort
 from flask.ext.restful import Resource
 from flask.ext.login import current_user, login_required
-from invenio.base.manage import app
-from flask.ext import restful
+#from invenio.base.manage import app
+#from flask.ext import restful
 from flask import jsonify
 from invenio.modules.messages import api as messagesAPI
 
@@ -140,7 +140,7 @@ class MessagesListResource(Resource):
 # Register API resources
 #
 
-api = restful.Api(app=app)
+#api = restful.Api(app=app)
 
 
 def setup_app(app, api):
