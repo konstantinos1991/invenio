@@ -28,8 +28,7 @@ from invenio.modules.messages.models import UserMsgMESSAGE
 
 
 def user_exists(uid):
-    """
-        checks if a user exists in the system, given his uid
+    """checks if a user exists in the system, given his uid
         @param uid: the user id
         @return: True if the user exists in the system, else False
     """

@@ -335,7 +335,7 @@ def check_quota(nb_messages):
 #get_element(sql_res) NOT NEEDED
 
 def clean_messages():
-    """ Cleans msgMESSAGE table"""
+    """ Cleans MsgMESSAGE table"""
     msgids_to_delete = []
 
     all_messages_ids = db.session.query(MsgMESSAGE.id).all()

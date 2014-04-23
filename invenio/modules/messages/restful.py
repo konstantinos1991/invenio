@@ -83,8 +83,7 @@ class MessageResource(Resource):
 
     @login_required
     def put(self, message_id):
-        """
-        replies to a message
+        """Replies to a message
         :param msg_id: the id of the message to reply to
         """
         pass
@@ -102,8 +101,7 @@ class MessageResource(Resource):
 class MessagesListResource(Resource):
     @login_required
     def get(self):
-        """
-        returns all messages of a user
+        """Returns all messages of a user
         """
         # from flask import request
         # request.args
@@ -111,15 +109,13 @@ class MessagesListResource(Resource):
 
     @login_required
     def delete(self):
-        """
-        deletes all messages of a user
+        """Deletes all messages of a user
         """
         pass
 
     @login_required
     def post(self):
-        """
-        creates and sends a new message
+        """Creates and sends a new message
         """
         pass
 
