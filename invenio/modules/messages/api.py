@@ -45,12 +45,12 @@ from invenio.modules.messages.util import filter_messages_from_user_with_status,
 
 
 def check_user_owns_message(uid, msgid):
-    """
+    """Checks whether a user owns a message
+
     **REFACTORED
-    Checks whether a user owns a message
     :param uid:   user id
     :param msgid: message id
-    :return: True if the user owns the message, else False
+    :returns: bool -- True if the user owns the message, else False
     """
     user_msg = UserMsgMESSAGE.query.filter_by(id_user_to=uid,
                                               id_msgMESSAGE=msgid).first()
@@ -65,7 +65,7 @@ def get_message(uid, msgid):
 
     :param uid: user id
     :param msgid: message id
-    :return: exactly one message or raise an exception.
+    :returns: MsgMESSAGE -- exactly one message or raise an exception.
     """
     try:
         return UserMsgMESSAGE.query.options(db.joinedload_all(UserMsgMESSAGE.message, MsgMESSAGE.user_from)).\
@@ -75,8 +75,8 @@ def get_message(uid, msgid):
 
 
 def set_message_status(uid, msgid, new_status):
-    """
-    Change the status of a message (e.g. from "new" to "read").
+    """Change the status of a message (e.g. from "new" to "read").
+
     the status is a single character string, specified in constant
     CFG_WEBMESSAGE_STATUS_CODE in file webmessage_config.py
     examples:
@@ -86,16 +86,16 @@ def set_message_status(uid, msgid, new_status):
     :param uid:        user ID
     :param msgid:      Message ID
     :param new_status: new status. Should be a single character
-    :return: 1 if succes, 0 if not
+    :returns: int -- 1 if success, 0 if not
     """
     return db.session.query(UserMsgMESSAGE).filter(filter_user_message(uid, msgid)).update({UserMsgMESSAGE.status: new_status})
 
 
 def update_user_inbox_for_reminders(uid):
-    """
-    Updates user's inbox with any reminders that should have arrived
+    """Updates user's inbox with any reminders that should have arrived
+
     :param uid: user id
-    :return: integer number of new expired reminders
+    :returns: int -- number of new expired reminders
     """
     #now = convert_datestruct_to_datetext(localtime())
     reminder_status = CFG_WEBMESSAGE_STATUS_CODE['REMINDER']
@@ -128,7 +128,7 @@ def get_nb_new_messages_for_user(uid):
 def get_nb_readable_messages_for_user(uid):
     """ Get number of mails of a fiven user. Reminders are not counted
     :param uid: user id (int)
-    :return: number of messages (int)
+    :returns: int -- number of messages
     """
     return \
         db.session.query(db.func.count(UserMsgMESSAGE.id_msgMESSAGE)).\
@@ -138,12 +138,11 @@ def get_nb_readable_messages_for_user(uid):
 
 
 def get_all_messages_for_user(uid):
-    """
-    Get all messages for a user's inbox, without the eventual
-    non-expired reminders.
+    """Get all messages for a user's inbox,
+    without the eventual non-expired reminders.
 
     :param uid: user id
-    :return: [(message_id,
+    :returns: [(message_id,
               id_user_from,
               nickname_user_from,
               message_subject,
@@ -159,9 +158,10 @@ def get_all_messages_for_user(uid):
 
 
 def count_nb_messages(uid):
-    """
+    """Counts the messages of a user
+
     :param uid: user id
-    :return: integer of number of messages a user has, 0 if none
+    :returns: int -- number of messages a user has, 0 if none
     """
     uid = int(uid)
     return \
@@ -172,13 +172,13 @@ def count_nb_messages(uid):
 
 
 def delete_message_from_user_inbox(uid, msg_id):
-    """
-    Delete message from users inbox
+    """Delete message from users inbox
+
     If this message does not exist in any other user's inbox,
     delete it permanently from the database
     :param uid: user id
     :param msg_id: message id
-    :return: integer 1 if delete was successful, integer 0 else
+    :returns: int 1 if delete was successful, 0 else
     """
     res = \
         UserMsgMESSAGE.query.filter(filter_user_message(uid, msg_id)).\
@@ -188,11 +188,10 @@ def delete_message_from_user_inbox(uid, msg_id):
 
 
 def check_if_need_to_delete_message_permanently(msg_ids):
-    """
-    Checks if a list of messages exist in anyone's inbox, if not,
+    """Checks if a list of messages exist in anyone's inbox, if not,
     delete them permanently
     :param msg_id: sequence of message ids
-    :return: number of deleted messages
+    :returns: int -- number of deleted messages
     """
     if not((type(msg_ids) is list) or (type(msg_ids) is tuple)):
         msg_ids = [msg_ids]
@@ -210,10 +209,9 @@ def check_if_need_to_delete_message_permanently(msg_ids):
 
 
 def delete_all_messages(uid):
-    """
-    Delete all messages of a user (except reminders)
+    """Delete all messages of a user (except reminders)
     :param uid: user id
-    :return: the number of messages deleted
+    :returns: int -- the number of messages deleted
     """
     reminder_status = CFG_WEBMESSAGE_STATUS_CODE['REMINDER']
     msg_ids = map(lambda (x, ): x, db.session.query(UserMsgMESSAGE.id_msgMESSAGE).filter(db.and_(UserMsgMESSAGE.id_user_to == uid, UserMsgMESSAGE.status != reminder_status)).all())
@@ -225,11 +223,11 @@ def delete_all_messages(uid):
 
 
 def check_if_user_has_free_space(uid):
-    """
+    """checks if a user has free space to his inbox
+
     **ADDED
-    checks if a user has free space to his inbox
     :param uid: user id
-    :return: True if the user has free space in inbox , else False
+    :returns: bool -- True if the user has free space in inbox , else False
     """
     users_with_full_mailbox = check_quota(CFG_WEBMESSAGE_MAX_NB_OF_MESSAGES)
     if uid in users_with_full_mailbox:
@@ -255,7 +253,7 @@ def create_message(uid_from,
     :param msg_body: string containing the body of the message
     :param msg_send_on_date: date on which message must be sent. Has to be a
                              datetex format (i.e. YYYY-mm-dd HH:MM:SS)
-    :return: id of the created message
+    :returns: int -- id of the created message
     """
     now = convert_datestruct_to_datetext(localtime())
     m = MsgMESSAGE(id_user_from=uid_from, sent_to_user_nicks=users_to_str, sent_to_group_names=groups_to_str, subject=msg_subject, body=msg_body, sent_date=now, received_date=msg_send_on_date)
@@ -263,13 +261,13 @@ def create_message(uid_from,
 
 
 def send_message(uids_to, msgid, status=CFG_WEBMESSAGE_STATUS_CODE['NEW']):
-    """
+    """Send message to uids
+
     **REFACTORED
-    Send message to uids
     @param uids: sequence of user ids
     @param msg_id: id of message
     @param status: status of the message. (single char, see webmessage_config.py).
-    @return: a list of users having their mailbox full
+    @returns: a list of users having their mailbox full
     """
     if not((type(uids_to) is list) or (type(uids_to) is tuple)):
         uids_to = [uids_to]
@@ -313,8 +311,8 @@ def send_message(uids_to, msgid, status=CFG_WEBMESSAGE_STATUS_CODE['NEW']):
 
 def check_quota(nb_messages):
     """
-    @param nb_messages: max number of messages a user can have
-    @return: a dictionary of users over-quota
+    :aram nb_messages: max number of messages a user can have
+    :returns: a dictionary of users over-quota
     """
     from invenio.legacy.webuser import collect_user_info
     from invenio.modules.access.control import acc_is_user_in_role, acc_get_role_id

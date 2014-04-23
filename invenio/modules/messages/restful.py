@@ -35,23 +35,23 @@ class MessageResource(Resource):
     def get(self, message_id):
         """Returns a message in json format
 
-        The dictionary that is returned as json has the following format
-        key: 'successful' -> values: 'True'(shows if message was successfully retrieved),'False'
-        key: 'id_user_from' -> values: int(the message id)
-        key: 'sent_to_user_nicks' -> values: string(the nicknames of users recipients)
-        key: 'sent_to_group_names' -> values: string(the groups names)
-        key: 'subject' -> values: string(the subject of the message)
-        key: 'body' -> values: string(the body of the message)
-        key: 'sent_date' -> values: string(the date the message was sent)
-        key: 'received_date' -> values: string(the date the message was received)
         :param message_id: the id of the message to return
+        Returns:
+            a dictionary as json that has the following format
+            key: 'successful' -> values: 'True'(shows if message was successfully retrieved),'False'
+            key: 'id_user_from' -> values: int(the message id)
+            key: 'sent_to_user_nicks' -> values: string(the nicknames of users recipients)
+            key: 'sent_to_group_names' -> values: string(the groups names)
+            key: 'subject' -> values: string(the subject of the message)
+            key: 'body' -> values: string(the body of the message)
+            key: 'sent_date' -> values: string(the date the message was sent)
+            key: 'received_date' -> values: string(the date the message was received)
         """
         uid = current_user.get_id()
         requested_message = messagesAPI.get_message(uid, message_id)
         return_dictionary = {}  # data to return as json
         if requested_message is None:
             return_dictionary['successful'] = 'False'
-            #maybe add a 'problem' key to specify what error happened
         else:
             return_dictionary['successful'] = 'True'
             return_dictionary['id'] = int(requested_message.id)
@@ -68,9 +68,10 @@ class MessageResource(Resource):
     def delete(self, message_id):
         """Deletes a message
 
-        The dictionary that is returned as json has the following format
-        key: 'message_deleted' -> values: 'True'(if message is deleted) , 'False'
         :param message_id: the id of the message to delete
+        Returns:
+            a dictionary as json that has the following format
+            key: 'message_deleted' -> values: 'True'(if message is deleted) , 'False'
         """
         uid = current_user.get_id()
         delete_message_result = messagesAPI.delete_message_from_user_inbox(uid, message_id)
@@ -84,6 +85,9 @@ class MessageResource(Resource):
     @login_required
     def put(self, message_id):
         """Replies to a message
+
+        First it accepts the body that will be added to the body
+        of the old message
         :param msg_id: the id of the message to reply to
         """
         pass
@@ -101,17 +105,46 @@ class MessageResource(Resource):
 class MessagesListResource(Resource):
     @login_required
     def get(self):
-        """Returns all messages of a user
+        """Gets information about all messages of a user
+        Returns:
+            A dictionary is returned and every record is
+            a dictionary that represents a message.
         """
         # from flask import request
         # request.args
-        pass
+        uid = current_user.get_id()
+        return_dictionary = {}    # the dictionary that will contain the messages as dictionaries. the keys will be the message ids
+        messages_lists = messagesAPI.get_all_messages_for_user(uid)     # this is a list of lists
+        for m_list in messages_lists:
+            message_as_dictionary = {}      # this dictionary will represent a single message
+            message_id = int(m_list[0])     # get the message id
+            message_as_dictionary['message_id'] = message_id
+            id_user_from = int(m_list[1])   # get the id of the sender
+            message_as_dictionary['id_user_from'] = int(id_user_from)
+            nickname_user_from = str(m_list[2])     # get the nickname of the sender
+            message_as_dictionary['nickname_user_from'] = nickname_user_from
+            message_subject = str(m_list[3])    # get the subject
+            message_as_dictionary['message_subject'] = message_subject
+            message_sent_date = str(m_list[4])      # get the date the message was sent
+            message_as_dictionary['message_sent_date'] = message_sent_date
+            message_status = str(m_list[5])     # get the status of the message
+            message_as_dictionary['message_status'] = message_status
+            key = 'MSG_'+message_id     # create a key
+            return_dictionary[key] = message_as_dictionary    # add the the message to the dictionary
+        return jsonify(return_dictionary)
 
     @login_required
     def delete(self):
-        """Deletes all messages of a user
+        """Deletes all messages of a user(except the reminders)
+
+        Returns:
+            a dictionary containing the number of the deleted messages
         """
-        pass
+        uid = current_user.get_id()
+        number_of_deleted_messages = messagesAPI.delete_all_messages(uid)
+        return_dictionary = {}
+        return_dictionary['number_of_deleted_messages'] = number_of_deleted_messages
+        return jsonify(return_dictionary)
 
     @login_required
     def post(self):
