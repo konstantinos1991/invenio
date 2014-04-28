@@ -42,6 +42,8 @@ from invenio.modules.messages.models import MsgMESSAGE, UserMsgMESSAGE
 from invenio.modules.accounts.models import User
 from invenio.modules.messages.util import filter_messages_from_user_with_status, filter_all_messages_from_user, \
     filter_user_message
+from invenio.modules.messages.errors import MessageNotFound, MessageNotDeleted, \
+    MessagesNotFetchedError, MessageNotCreatedError
 
 
 def check_user_owns_message(uid, msgid):
@@ -54,24 +56,53 @@ def check_user_owns_message(uid, msgid):
     """
     user_msg = UserMsgMESSAGE.query.filter_by(id_user_to=uid,
                                               id_msgMESSAGE=msgid).first()
-    if user_msg is not None:
-        return True
-    else:
+    if user_msg is None:
         return False
+    return True
 
 
-def get_message(uid, msgid):
+def message_exists(msgid):
+    """Checks if a message with exists in the database
+
+    :param msgid: message id
+    :returns: bool -- True if msgid exists else False
+    """
+    m = MsgMESSAGE.query.filter_by(id=msgid).first()
+    if m is None:
+        return False
+    return True
+
+
+def get_message(msgid):
+    """ Fetches a message from the table MsgMESSAGE
+
+    :param msgid: the id of the message
+    :returns: -- an object of type MsgMESSAGE
+    """
+    try:
+        return MsgMESSAGE.query.filter(MsgMESSAGE.id == int(msgid)).one()
+    except Exception:
+        raise MessageNotFound("Message cannot be found")
+
+
+def get_message_from_user_inbox(uid, msgid):
     """Get a message with its status and sender nickname.
 
     :param uid: user id
     :param msgid: message id
-    :returns: MsgMESSAGE -- exactly one message or raise an exception.
+    :returns: exactly one message or raise an exception.
     """
+    # try:
+    #     return UserMsgMESSAGE.query.options(db.joinedload_all(UserMsgMESSAGE.message, MsgMESSAGE.user_from)).\
+    #         options(db.joinedload(UserMsgMESSAGE.user_to)).filter(filter_user_message(uid, msgid)).one()
+    # except Exception:
+    #     raise MessageNotFound("Message cannot be found")
     try:
-        return UserMsgMESSAGE.query.options(db.joinedload_all(UserMsgMESSAGE.message, MsgMESSAGE.user_from)).\
-            options(db.joinedload(UserMsgMESSAGE.user_to)).filter(filter_user_message(uid, msgid)).one()
-    except:
-            return None
+        return UserMsgMESSAGE.query.\
+            filter(UserMsgMESSAGE.id_user_to == int(uid),
+                   UserMsgMESSAGE.id_msgMESSAGE == int(msgid)).one()
+    except Exception:
+        raise MessageNotFound("Message cannot be found")
 
 
 def set_message_status(uid, msgid, new_status):
@@ -142,6 +173,7 @@ def get_all_messages_for_user(uid):
     without the eventual non-expired reminders.
 
     :param uid: user id
+    :returns: -- a list of objects of type UserMsgMESSAGE
     :returns: [(message_id,
               id_user_from,
               nickname_user_from,
@@ -149,12 +181,87 @@ def get_all_messages_for_user(uid):
               message_sent_date,
               message_status)]
     """
-    update_user_inbox_for_reminders(uid)
-    return \
-        MsgMESSAGE.query.options(db.joinedload(MsgMESSAGE.user_from)).\
-        join(UserMsgMESSAGE).\
-        filter(filter_all_messages_from_user(uid)).\
-        order_by(MsgMESSAGE.sent_date).all()
+    try:
+        update_user_inbox_for_reminders(uid)
+        reminder = CFG_WEBMESSAGE_STATUS_CODE['REMINDER']
+        return \
+            UserMsgMESSAGE.query.join(MsgMESSAGE).\
+            filter(MsgMESSAGE.id == UserMsgMESSAGE.id_msgMESSAGE,
+                   UserMsgMESSAGE.id_user_to == int(uid),
+                   UserMsgMESSAGE.status != reminder).\
+            order_by(MsgMESSAGE.received_date).all()
+        # return \
+        #     MsgMESSAGE.query.options(db.joinedload(MsgMESSAGE.user_from)).\
+        #     join(UserMsgMESSAGE).\
+        #     filter(filter_all_messages_from_user(uid)).\
+        #     order_by(MsgMESSAGE.sent_date).all()
+    except Exception:
+        raise MessagesNotFetchedError("Could not fetch messages")
+
+
+def number_of_all_messages_in_inbox_of_user(uid):
+    """Get the number of all messages of a user's inbox
+
+    :param uid: user id
+    :returns: int -- number of messages of a user's inbox
+    """
+    return len(get_all_messages_for_user(uid))
+
+
+def get_new_messages_for_user(uid):
+    """ Fetches all new messages
+
+    :param uid: the user id_user_from
+    :returns: -- a list of objects of type UserMsgMESSAGE
+    """
+    try:
+        update_user_inbox_for_reminders(uid)
+        NEW = CFG_WEBMESSAGE_STATUS_CODE['NEW']
+        return \
+            UserMsgMESSAGE.query.join(MsgMESSAGE).\
+            filter(MsgMESSAGE.id == UserMsgMESSAGE.id_msgMESSAGE,
+                   UserMsgMESSAGE.id_user_to == int(uid),
+                   UserMsgMESSAGE.status == NEW).\
+            order_by(MsgMESSAGE.received_date).all()
+    except Exception:
+        raise MessagesNotFetchedError("Could not fetch new messages")
+
+
+def number_of_new_messages_for_user(uid):
+    """ Counts the new messages of a user
+
+    :param uid: the user id
+    :returns: int -- the number of the new messages in a user's inbox
+    """
+    return len(get_new_messages_for_user(uid))
+
+
+def get_the_read_messages_in_inbox_of_user(uid):
+    """ Fetches the messages that a user has read already
+
+    :param uid: the user id
+    :returns: -- a list of objects of type UserMsgMESSAGE
+    """
+    try:
+        update_user_inbox_for_reminders(uid)
+        READ = CFG_WEBMESSAGE_STATUS_CODE['READ']
+        return \
+            UserMsgMESSAGE.query.join(MsgMESSAGE).\
+            filter(MsgMESSAGE.id == UserMsgMESSAGE.id_msgMESSAGE,
+                   UserMsgMESSAGE.id_user_to == int(uid),
+                   UserMsgMESSAGE.status == READ).\
+            order_by(MsgMESSAGE.received_date).all()
+    except Exception:
+        raise MessagesNotFetchedError("Could not fetch the messages that are already read")
+
+
+def number_of_read_messages_in_inbox_of_user(uid):
+    """ Counts the read messages of a user
+
+    :param uid: the user id
+    :returns: int -- the number of the new messages in a user's inbox
+    """
+    return len(get_the_read_messages_in_inbox_of_user(uid))
 
 
 def count_nb_messages(uid):
@@ -180,16 +287,22 @@ def delete_message_from_user_inbox(uid, msg_id):
     :param msg_id: message id
     :returns: int 1 if delete was successful, 0 else
     """
-    res = \
-        UserMsgMESSAGE.query.filter(filter_user_message(uid, msg_id)).\
-        delete(synchronize_session=False)
-    check_if_need_to_delete_message_permanently(msg_id)
-    return res
+    try:
+        res = \
+            UserMsgMESSAGE.query.filter(filter_user_message(uid, msg_id)).\
+            delete(synchronize_session=False)
+        check_if_need_to_delete_message_permanently(msg_id)
+        if res == 0:
+            raise MessageNotDeleted("Message could not be deleted")
+        return res
+    except Exception:
+        raise MessageNotDeleted("Message could not be deleted")
 
 
 def check_if_need_to_delete_message_permanently(msg_ids):
     """Checks if a list of messages exist in anyone's inbox, if not,
     delete them permanently
+
     :param msg_id: sequence of message ids
     :returns: int -- number of deleted messages
     """
@@ -210,16 +323,20 @@ def check_if_need_to_delete_message_permanently(msg_ids):
 
 def delete_all_messages(uid):
     """Delete all messages of a user (except reminders)
+
     :param uid: user id
     :returns: int -- the number of messages deleted
     """
-    reminder_status = CFG_WEBMESSAGE_STATUS_CODE['REMINDER']
-    msg_ids = map(lambda (x, ): x, db.session.query(UserMsgMESSAGE.id_msgMESSAGE).filter(db.and_(UserMsgMESSAGE.id_user_to == uid, UserMsgMESSAGE.status != reminder_status)).all())
-    nb_messages = \
-        UserMsgMESSAGE.query.filter(db.and_(UserMsgMESSAGE.id_user_to == uid, UserMsgMESSAGE.status != reminder_status)).delete(synchronize_session=False)
-    if len(msg_ids) > 0:
-        check_if_need_to_delete_message_permanently(msg_ids)
-    return nb_messages
+    try:
+        reminder_status = CFG_WEBMESSAGE_STATUS_CODE['REMINDER']
+        msg_ids = map(lambda (x, ): x, db.session.query(UserMsgMESSAGE.id_msgMESSAGE).filter(db.and_(UserMsgMESSAGE.id_user_to == uid, UserMsgMESSAGE.status != reminder_status)).all())
+        nb_messages = \
+            UserMsgMESSAGE.query.filter(db.and_(UserMsgMESSAGE.id_user_to == uid, UserMsgMESSAGE.status != reminder_status)).delete(synchronize_session=False)
+        if len(msg_ids) > 0:
+            check_if_need_to_delete_message_permanently(msg_ids)
+        return nb_messages
+    except Exception:
+        raise MessageNotDeleted("Error while deleting all messages")
 
 
 def check_if_user_has_free_space(uid):
@@ -255,9 +372,13 @@ def create_message(uid_from,
                              datetex format (i.e. YYYY-mm-dd HH:MM:SS)
     :returns: int -- id of the created message
     """
-    now = convert_datestruct_to_datetext(localtime())
-    m = MsgMESSAGE(id_user_from=uid_from, sent_to_user_nicks=users_to_str, sent_to_group_names=groups_to_str, subject=msg_subject, body=msg_body, sent_date=now, received_date=msg_send_on_date)
-    return m.send()
+    try:
+        now = convert_datestruct_to_datetext(localtime())
+        m = MsgMESSAGE(id_user_from=uid_from, sent_to_user_nicks=users_to_str, sent_to_group_names=groups_to_str, subject=msg_subject, body=msg_body, sent_date=now, received_date=msg_send_on_date)
+        return m.send()
+    except Exception:
+        db.session.rollback()   # rollback so the database is not incosistent
+        raise MessageNotCreatedError("Message could not be created")
 
 
 def send_message(uids_to, msgid, status=CFG_WEBMESSAGE_STATUS_CODE['NEW']):
@@ -311,7 +432,7 @@ def send_message(uids_to, msgid, status=CFG_WEBMESSAGE_STATUS_CODE['NEW']):
 
 def check_quota(nb_messages):
     """
-    :aram nb_messages: max number of messages a user can have
+    :param nb_messages: max number of messages a user can have
     :returns: a dictionary of users over-quota
     """
     from invenio.legacy.webuser import collect_user_info

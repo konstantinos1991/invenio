@@ -22,73 +22,155 @@ Restful api for the messages module.
 
 from flask.ext.restful import abort
 from flask.ext.restful import Resource
-from flask.ext.login import current_user, login_required
-#from invenio.base.manage import app
-#from flask.ext import restful
+from invenio.ext.restful import require_api_auth, require_header, UTCISODateTimeString
+from flask.ext.restful import fields, marshal
+from flask.ext.login import current_user
+from functools import wraps
 from flask import jsonify
+from flask import request
+from invenio.modules.messages.config import \
+    CFG_WEBMESSAGE_STATUS_CODE
 from invenio.modules.messages import api as messagesAPI
+from invenio.modules.messages.errors import InvenioWebMessageError, MessageNotFound, MessageNotDeleted, \
+    MessagesNotFetchedError, MessageNotCreatedError
+#for marshaling the MessageObject
+from cerberus import Validator
 
 
+#Define the error handler
+def error_handler(f):
+    """
+    Decorator to handle message exceptions
+    """
+    @wraps(f)
+    def inner(*args, **kwargs):
+        try:
+            return f(*args, **kwargs)
+        except MessageNotFound as e:
+            abort(404, message=str(e), status=404)
+        except MessageNotDeleted as e:
+            abort(400, message=str(e), status=400)
+        except MessagesNotFetchedError as e:
+            abort(400, message=str(e), status=400)
+        except MessageNotCreatedError as e:
+            abort(400, message=str(e), status=400)
+        except InvenioWebMessageError as e:
+            if len(e.args) >= 1:
+                abort(400, message=e.args[0], status=400)
+            else:
+                abort(500, message="Internal server error", status=500)
+    return inner
+
+
+class MessageObject(object):
+    """A class that contains several informations about a message
+
+    It will be used only to return informations back to the client and
+    it has no interaction with the database
+    """
+
+    def __init__(self, id, id_user_from, nickname_user_from, sent_to_user_nicks, sent_to_group_names,
+                 subject, body, sent_date, received_date, status):
+        """Initialize a message object"""
+        self.id = id
+        self.id_user_from = id_user_from
+        self.nickname_user_from = nickname_user_from
+        self.sent_to_user_nicks = sent_to_user_nicks
+        self.sent_to_group_names = sent_to_group_names
+        self.subject = subject
+        self.body = body
+        self.send_date = sent_date
+        self.received_date = received_date
+        self.status = status
+        #set the marshaling fields
+        self.marshal_message_fields = dict(
+            id=fields.Integer,
+            id_user_from=fields.Integer,
+            nickname_user_from=fields.String,
+            sent_to_user_nicks=fields.String,
+            sent_to_group_names=fields.String,
+            subject=fields.String,
+            body=fields.String,
+            sent_date=fields.String,
+            received_date=fields.String,
+            status=fields.String
+        )
+
+    def marshal(self):
+        """ Packages the object to a dictionary(JSON) """
+        return marshal(self, self.marshaling_fields)
+
+
+#schema to be validated for POST in MessagesListResource
+create_message_post_schema = {
+    'users_nicknames_to': {'type': 'string'},
+    'groups_names_to': {'type': 'string'},
+    'subject': {'type': 'string'},
+    'body': {'type': 'string'},
+    'sent_date': {'type': 'string'}
+}
+
+
+#The Resources
 class MessageResource(Resource):
 
-    @login_required
-    def get(self, message_id):
+    method_decorators = [
+        require_api_auth(),
+        error_handler
+    ]
+
+    def get(self, oauth, message_id):
         """Returns a message in json format
 
         :param message_id: the id of the message to return
         Returns:
-            a dictionary as json that has the following format
-            key: 'successful' -> values: 'True'(shows if message was successfully retrieved),'False'
-            key: 'id_user_from' -> values: int(the message id)
-            key: 'sent_to_user_nicks' -> values: string(the nicknames of users recipients)
-            key: 'sent_to_group_names' -> values: string(the groups names)
-            key: 'subject' -> values: string(the subject of the message)
-            key: 'body' -> values: string(the body of the message)
-            key: 'sent_date' -> values: string(the date the message was sent)
-            key: 'received_date' -> values: string(the date the message was received)
+            a dictionary as JSON that contains all the information of a message
+            a message is marshaled with the attributes id,id_user_from,nickname_user_from,
+            sent_to_user_nicks,sent_to_group_names,subject,body,sent_date,received_date,
+            status
         """
         uid = current_user.get_id()
-        requested_message = messagesAPI.get_message(uid, message_id)
-        return_dictionary = {}  # data to return as json
-        if requested_message is None:
-            return_dictionary['successful'] = 'False'
-        else:
-            return_dictionary['successful'] = 'True'
-            return_dictionary['id'] = int(requested_message.id)
-            return_dictionary['id_user_from'] = int(requested_message.id_user_from)
-            return_dictionary['sent_to_user_nicks'] = str(requested_message._sent_to_user_nicks)
-            return_dictionary['sent_to_group_names'] = str(requested_message._sent_to_group_names)
-            return_dictionary['subject'] = str(requested_message.subject)
-            return_dictionary['body'] = str(requested_message.body)
-            return_dictionary['sent_date'] = str(requested_message.sent_date)
-            return_dictionary['received_date'] = str(requested_message.received_date)
-        return jsonify(return_dictionary)
+        requested_message = messagesAPI.get_message_from_user_inbox(uid, message_id)
+        #convert attributes to marshal the object correctly
+        m_id = int(requested_message.message.id)
+        id_user_from = int(requested_message.message.id_user_from)
+        nickname_user_from = str(requested_message.message.user_from.nickname)
+        sent_to_user_nicks = str(requested_message.message._sent_to_user_nicks)
+        sent_to_group_names = str(requested_message.message._sent_to_group_names)
+        subject = str(requested_message.message.subject)
+        body = str(requested_message.message.body)
+        status = str(requested_message.status)
+        #convert the date-times to strings
+        utc_iso_datetime_string = UTCISODateTimeString()
+        sent_date = str(utc_iso_datetime_string.format(requested_message.message.sent_date))
+        received_date = str(utc_iso_datetime_string.format(requested_message.message.received_date))
+        #now create an instance of class MessageObject
+        message_object = MessageObject(id=m_id, id_user_from=id_user_from,
+                                       nickname_user_from=nickname_user_from,
+                                       sent_to_user_nicks=sent_to_user_nicks,
+                                       sent_to_group_names=sent_to_group_names,
+                                       subject=subject, body=body,
+                                       sent_date=sent_date, received_date=received_date,
+                                       status=status)
+        return message_object.marshal()
 
-    @login_required
-    def delete(self, message_id):
+    def delete(self, oauth, message_id):
         """Deletes a message
 
         :param message_id: the id of the message to delete
         Returns:
-            a dictionary as json that has the following format
-            key: 'message_deleted' -> values: 'True'(if message is deleted) , 'False'
+            "" , 204 if the deletion of the message was successful
         """
         uid = current_user.get_id()
-        delete_message_result = messagesAPI.delete_message_from_user_inbox(uid, message_id)
-        return_dictionary = {}
-        if delete_message_result == 1:
-            return_dictionary['message_deleted'] = 'True'
-        else:
-            return_dictionary['message_deleted'] = 'False'
-        return jsonify(return_dictionary)
+        messagesAPI.delete_message_from_user_inbox(uid, message_id)
+        return "", 204
 
-    @login_required
-    def put(self, message_id):
+    def put(self, oauth, message_id):
         """Replies to a message
 
         First it accepts the body that will be added to the body
         of the old message
-        :param msg_id: the id of the message to reply to
+        :param message_id: the id of the message to reply to
         """
         pass
 
@@ -103,62 +185,104 @@ class MessageResource(Resource):
 
 
 class MessagesListResource(Resource):
-    @login_required
-    def get(self):
+
+    method_decorators = [
+        require_api_auth(),
+        error_handler
+    ]
+
+    def get(self, oauth):
         """Gets information about all messages of a user
+
         Returns:
-            A dictionary is returned and every record is
-            a dictionary that represents a message.
+            A dictionary is returned as JSON in format
+            key:id_of_message as string , value:marshaled_message.
         """
-        # from flask import request
-        # request.args
         uid = current_user.get_id()
         return_dictionary = {}    # the dictionary that will contain the messages as dictionaries. the keys will be the message ids
-        messages_lists = messagesAPI.get_all_messages_for_user(uid)     # this is a list of lists
-        for m_list in messages_lists:
-            message_as_dictionary = {}      # this dictionary will represent a single message
-            message_id = int(m_list[0])     # get the message id
-            message_as_dictionary['message_id'] = message_id
-            id_user_from = int(m_list[1])   # get the id of the sender
-            message_as_dictionary['id_user_from'] = int(id_user_from)
-            nickname_user_from = str(m_list[2])     # get the nickname of the sender
-            message_as_dictionary['nickname_user_from'] = nickname_user_from
-            message_subject = str(m_list[3])    # get the subject
-            message_as_dictionary['message_subject'] = message_subject
-            message_sent_date = str(m_list[4])      # get the date the message was sent
-            message_as_dictionary['message_sent_date'] = message_sent_date
-            message_status = str(m_list[5])     # get the status of the message
-            message_as_dictionary['message_status'] = message_status
-            key = 'MSG_'+message_id     # create a key
-            return_dictionary[key] = message_as_dictionary    # add the the message to the dictionary
-        return jsonify(return_dictionary)
+        utc_iso_datetime_string = UTCISODateTimeString()
+        user_messages = messagesAPI.get_all_messages_for_user(uid)
+        for m in user_messages:
+            message_object = MessageObject(id=int(m.id_msgMESSAGE),
+                                           id_user_from=int(m.message.id_user_from),
+                                           nickname_user_from=str(m.message.user_from.nickname),
+                                           sent_to_user_nicks=str(m.message._sent_to_user_nicks),
+                                           sent_to_group_names=str(m.message._sent_to_group_names),
+                                           subject=str(m.message.subject),
+                                           body=str(m.message.body),
+                                           sent_date=str(utc_iso_datetime_string.format(m.message.sent_date)),
+                                           received_date=str(utc_iso_datetime_string.format(m.message.received_date)),
+                                           status=str(m.status))
+            return_dictionary[str(m.id_msgMESSAGE)] = message_object.marshal()
+            return jsonify(return_dictionary)
 
-    @login_required
-    def delete(self):
+    def delete(self, oauth):
         """Deletes all messages of a user(except the reminders)
 
         Returns:
             a dictionary containing the number of the deleted messages
         """
         uid = current_user.get_id()
-        number_of_deleted_messages = messagesAPI.delete_all_messages(uid)
-        return_dictionary = {}
-        return_dictionary['number_of_deleted_messages'] = number_of_deleted_messages
-        return jsonify(return_dictionary)
+        messagesAPI.delete_all_messages(uid)
+        # return_dictionary = {}
+        # return_dictionary['number_of_deleted_messages'] = number_of_deleted_messages
+        # return jsonify(return_dictionary)
+        return "", 204
 
-    @login_required
-    def post(self):
+    @require_header('Content-Type', 'application/json')
+    def post(self, oauth):
+        ###IMPLEMENT ON MONDAY
         """Creates and sends a new message
+
+        The request must have the following parameters
+        users_nicknames_to
+        groups_names_to
+        subject
+        body
+        sent_date
+        All the above arguments must be string values
+        Returns:
+            a dictionary as json in the same format when
+            retrieving a message
         """
-        pass
+        uid = current_user.get_id()
+        createMessageValidator = Validator(create_message_post_schema)
+        json_data = request.get_json()
 
-    def head(self):
+        if createMessageValidator.validate(json_data) is False:
+            abort(400,
+                  message="validation failed",
+                  status=400,
+                  errors=createMessageValidator.errors)
+
+        created_message_id = \
+            messagesAPI.create_message(uid_from=uid,
+                                       users_to_str=json_data['users_nicknames_to'],
+                                       groups_to_str=json_data['groups_names_to'],
+                                       msg_subject=json_data['subject'],
+                                       msg_body=json_data['body'],
+                                       msg_send_on_date=json_data['sent_date'])
+        created_message = messagesAPI.get_message(created_message_id)
+        utc_iso_datetime_string = UTCISODateTimeString()
+        message_object = MessageObject(id=int(created_message.id),
+                                       id_user_from=int(created_message.id_user_from),
+                                       nickname_user_from=str(created_message.user_from.nickname),
+                                       sent_to_user_nicks=str(created_message._sent_to_user_nicks),
+                                       sent_to_group_names=str(created_message._sent_to_group_names),
+                                       subject=str(created_message.subject),
+                                       body=str(created_message.body),
+                                       sent_date=str(utc_iso_datetime_string.format(created_message.sent_date)),
+                                       received_date=str(utc_iso_datetime_string.format(created_message.received_date)),
+                                       status=str(CFG_WEBMESSAGE_STATUS_CODE['NEW']))
+        return message_object.marshal(), 201
+
+    def head(self, oauth):
         abort(405)
 
-    def options(self):
+    def options(self, oauth):
         abort(405)
 
-    def patch(self):
+    def patch(self, oauth):
         abort(405)
 
 

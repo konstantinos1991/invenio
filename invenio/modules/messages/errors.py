@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 ##
 ## This file is part of Invenio.
-## Copyright (C) 2013 CERN.
+## Copyright (C) 2013, 2014 CERN.
 ##
 ## Invenio is free software; you can redistribute it and/or
 ## modify it under the terms of the GNU General Public License as
@@ -24,10 +24,42 @@
 
 class InvenioWebMessageError(Exception):
     """A generic error for WebMessage."""
-    def __init__(self, message):
+    def __init__(self, message="General error concerning messages"):
         """Initialisation."""
         self.message = message
 
     def __str__(self):
         """String representation."""
         return repr(self.message)
+
+
+class MessageNotCreatedError(InvenioWebMessageError):
+    """An error indicating that a message could be created"""
+
+    def __init__(self, error_msg):
+        """Initialize using the parent class"""
+        InvenioWebMessageError.__init__(self, error_msg)
+
+
+class MessageNotFoundError(InvenioWebMessageError):
+    """An error indicating that a message cannot be found"""
+
+    def __init__(self, error_msg):
+        """Initialize using the parent class"""
+        InvenioWebMessageError.__init__(self, error_msg)
+
+
+class MessageNotDeletedError(InvenioWebMessageError):
+    """An error indicating that a message cannot be deleted"""
+
+    def __init__(self, error_msg):
+        """Initialize using the parent class"""
+        InvenioWebMessageError.__init__(self, error_msg)
+
+
+class MessagesNotFetchedError(InvenioWebMessageError):
+    """An error indicating that the messages of a user cannot be fetched """
+
+    def __init__(self, error_msg):
+        """Initialize using the parent class"""
+        InvenioWebMessageError.__init__(self, error_msg)

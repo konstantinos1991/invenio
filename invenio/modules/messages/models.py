@@ -283,22 +283,6 @@ def email_alert_register():
         event.listen(MsgMESSAGE, 'after_insert', email_alert)
 
 
-def nicks_from_uids(uids):
-    """
-    **REFACTORED
-    Get the association uid/nickname of given uids
-    @param uids: list or sequence of uids
-    @return: a dictionary {uid: nickname} where empty value is possible
-    """
-    from invenio.modules.messages.util import get_nicks_from_uids
-    return get_nicks_from_uids(uids)
-
-
-def has_free_space(uid):
-    from invenio.modules.messages.api import check_if_user_has_free_space
-    return check_if_user_has_free_space(uid)
-
-
 class UserMsgMESSAGE(db.Model):
     """Represents a UserMsgMESSAGE record."""
     __tablename__ = 'user_msgMESSAGE'
@@ -315,6 +299,23 @@ class UserMsgMESSAGE(db.Model):
                               collection_class=set)
     message = db.relationship(MsgMESSAGE, backref='sent_to_users',
                               collection_class=set)
+
+
+#useful functions
+def nicks_from_uids(uids):
+    """
+    **REFACTORED
+    Get the association uid/nickname of given uids
+    @param uids: list or sequence of uids
+    @return: a dictionary {uid: nickname} where empty value is possible
+    """
+    from invenio.modules.messages.util import get_nicks_from_uids
+    return get_nicks_from_uids(uids)
+
+
+def has_free_space(uid):
+    from invenio.modules.messages.api import check_if_user_has_free_space
+    return check_if_user_has_free_space(uid)
 
 __all__ = ['MsgMESSAGE',
            'UserMsgMESSAGE']
