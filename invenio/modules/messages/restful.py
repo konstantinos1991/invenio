@@ -31,8 +31,9 @@ from flask import request
 from invenio.modules.messages.config import \
     CFG_WEBMESSAGE_STATUS_CODE
 from invenio.modules.messages import api as messagesAPI
-from invenio.modules.messages.errors import InvenioWebMessageError, MessageNotFound, MessageNotDeleted, \
-    MessagesNotFetchedError, MessageNotCreatedError
+from invenio.modules.messages import errors
+# from invenio.modules.messages.errors import InvenioWebMessageError, MessageNotFound, MessageNotDeleted, \
+#     MessagesNotFetchedError, MessageNotCreatedError
 #for marshaling the MessageObject
 from cerberus import Validator
 
@@ -46,15 +47,15 @@ def error_handler(f):
     def inner(*args, **kwargs):
         try:
             return f(*args, **kwargs)
-        except MessageNotFound as e:
+        except errors.MessageNotFound as e:
             abort(404, message=str(e), status=404)
-        except MessageNotDeleted as e:
+        except errors.MessageNotDeleted as e:
             abort(400, message=str(e), status=400)
-        except MessagesNotFetchedError as e:
+        except errors.MessagesNotFetchedError as e:
             abort(400, message=str(e), status=400)
-        except MessageNotCreatedError as e:
+        except errors.MessageNotCreatedError as e:
             abort(400, message=str(e), status=400)
-        except InvenioWebMessageError as e:
+        except errors.InvenioWebMessageError as e:
             if len(e.args) >= 1:
                 abort(400, message=e.args[0], status=400)
             else:
