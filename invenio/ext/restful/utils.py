@@ -18,6 +18,8 @@
 ## 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
 
 import json
+import six
+import warnings
 from flask import url_for
 from invenio.testsuite import InvenioTestCase
 from invenio.ext.sqlalchemy import db
@@ -28,7 +30,7 @@ class APITestCase(InvenioTestCase):
     API unit test base class
     """
     apikey = None
-    accesstoken = None
+    accesstoken = dict()
 
     def create_api_key(self, user_id):
         from invenio.modules.apikeys import create_new_web_api_key, \
@@ -47,7 +49,7 @@ class APITestCase(InvenioTestCase):
         """
         # Create a personal access token as well.
         from invenio.modules.oauth2server.models import Token
-        self.accesstoken = Token.create_personal(
+        self.accesstoken[user_id] = Token.create_personal(
             'test-personal-%s' % user_id,
             user_id,
             scopes=scopes,
@@ -55,12 +57,13 @@ class APITestCase(InvenioTestCase):
         ).access_token
 
     def remove_oauth_token(self):
-        if self.accesstoken:
-            from invenio.modules.oauth2server.models import Token
-            t = Token.query.filter_by(access_token=self.accesstoken).first()
+        for t in six.itervalues(self.accesstoken):
             if t:
-                db.session.delete(t)
-                db.session.commit()
+                from invenio.modules.oauth2server.models import Token
+                t = Token.query.filter_by(access_token=t).first()
+                if t:
+                    db.session.delete(t)
+                    db.session.commit()
 
     def remove_api_key(self):
         if self.apikey:
@@ -100,7 +103,7 @@ class APITestCase(InvenioTestCase):
 
     def make_request(self, client_func, endpoint, urlargs={}, data=None,
                      is_json=True, code=None, headers=None,
-                     follow_redirects=False):
+                     follow_redirects=False, user_id=None):
         """
         Make a request to the API endpoint.
 
@@ -128,10 +131,16 @@ class APITestCase(InvenioTestCase):
         else:
             request_args = {}
 
+        if user_id is None:
+            tokens = self.accesstoken.values()
+            if len(tokens) > 1:
+                warnings.warn("Please provide a user_id argument.")
+            user_id = tokens[0]
+
         if self.apikey:
             urlargs['apikey'] = self.apikey,
-        elif self.accesstoken:
-            urlargs['access_token'] = self.accesstoken
+        elif user_id in self.accesstoken:
+            urlargs['access_token'] = self.accesstoken[user_id]
 
         url = url_for(endpoint, **urlargs)
         response = client_func(

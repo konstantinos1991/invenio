@@ -21,10 +21,7 @@ functions of messages. The ORM mechanism of sqlalchemy
 will be mostly used here.
 """
 
-#from time import mktime
-from time import localtime
 from datetime import datetime
-
 #from invenio.legacy.dbquery import OperationalError
 from invenio.legacy.dbquery import run_sql
 from invenio.modules.messages.config import \
@@ -34,7 +31,7 @@ from invenio.modules.messages.config import \
 
 #from invenio.modules.messages.config import CFG_WEBMESSAGE_DAYS_BEFORE_DELETE_ORPHANS
 
-from invenio.utils.date import datetext_default, convert_datestruct_to_datetext
+#from invenio.utils.date import datetext_default, convert_datestruct_to_datetext
 #from invenio.legacy.websession.websession_config import CFG_WEBSESSION_USERGROUP_STATUS
 
 from invenio.ext.sqlalchemy import db
@@ -82,7 +79,8 @@ def get_message(msgid):
     """
     try:
         return MsgMESSAGE.query.filter(MsgMESSAGE.id == int(msgid)).one()
-    except Exception:
+    except Exception as e:
+        print e.args
         raise errors.MessageNotFound("Message cannot be found")
 
 
@@ -359,7 +357,7 @@ def create_message(uid_from,
                    groups_to_str="",
                    msg_subject="",
                    msg_body="",
-                   msg_send_on_date=datetext_default):
+                   msg_send_on_date=datetime.strptime(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "%Y-%m-%d %H:%M:%S")):
     """
     **REFACTORED
     Creates a message in the msgMESSAGE table. Does NOT send the message.
@@ -374,11 +372,36 @@ def create_message(uid_from,
     :returns: int -- id of the created message
     """
     try:
-        now = convert_datestruct_to_datetext(localtime())
-        m = MsgMESSAGE(id_user_from=uid_from, sent_to_user_nicks=users_to_str, sent_to_group_names=groups_to_str, subject=msg_subject, body=msg_body, sent_date=now, received_date=msg_send_on_date)
+        # if isinstance(msg_send_on_date,str):      #convert string to datetime.datetime
+        #     dt = datetime.strptime(msg_send_on_date, "%Y-%m-%d %H:%M:%S")
+        #     msg_send_on_date = dt
+        #     print "conversion"
+        # print "after datetime.strptime"
+        # m = MsgMESSAGE()
+        # print "created object m"
+        # m.id_user_from = uid_from
+        # print "set id_user_from"
+        # m.sent_date = msg_send_on_date
+        # print "set sent_date"
+        # m.received_date = msg_send_on_date
+        # print "set received_date"
+        # print users_to_str,type(users_to_str)
+        # m._sent_to_user_nicks = db.String(users_to_str)
+        # print "set user_nicks"
+        # m._sent_to_group_names = db.String(groups_to_str)
+        # print "set groups"
+        # m.subject = db.String(msg_subject)
+        # print "set subject"
+        # m.body = db.String(msg_body)
+        # print "set body"
+        m = MsgMESSAGE(id_user_from=uid_from, sent_to_user_nicks=users_to_str,
+                       sent_to_group_names=groups_to_str,
+                       subject=msg_subject, body=msg_body,
+                       sent_date=msg_send_on_date,
+                       received_date=msg_send_on_date)
         return m.send()
-    except Exception:
-        db.session.rollback()   # rollback so the database is not incosistent
+    except Exception as e:
+        print e.args
         raise errors.MessageNotCreatedError("Message could not be created")
 
 

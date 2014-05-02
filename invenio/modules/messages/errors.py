@@ -63,3 +63,8 @@ class MessagesNotFetchedError(InvenioWebMessageError):
     def __init__(self, error_msg):
         """Initialize using the parent class"""
         InvenioWebMessageError.__init__(self, error_msg)
+
+
+__all__ = ['InvenioWebMessageError', 'MessageNotCreatedError',
+           'MessageNotFoundError', 'MessageNotDeletedError',
+           'MessagesNotFetchedError']

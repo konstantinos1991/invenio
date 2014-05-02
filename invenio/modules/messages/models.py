@@ -160,9 +160,12 @@ class MsgMESSAGE(db.Model):
         """Sends this message to the recipients that are set.
         :return the id of the message
         """
-        db.session.add(self)
-        db.session.commit()
-        return self.id
+        try:
+            db.session.add(self)
+            db.session.commit()
+            return self.id
+        except Exception:
+            db.session.rollback()
 
     def reply_to_sender_only(self, reply_body, user_id=None):
         """Replies only to the sender
