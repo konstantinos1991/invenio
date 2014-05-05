@@ -21,8 +21,7 @@
 WebMessage database models.
 """
 
-import time
-
+from datetime import datetime
 # General imports
 from invenio.base.globals import cfg
 from invenio.ext.sqlalchemy import db
@@ -32,7 +31,6 @@ from string import strip
 from invenio.modules.accounts.models import User, Usergroup
 from sqlalchemy.ext.associationproxy import association_proxy
 from flask.ext.login import current_user
-from invenio.utils.date import convert_datestruct_to_datetext
 
 
 class MsgMESSAGE(db.Model):
@@ -189,8 +187,9 @@ class MsgMESSAGE(db.Model):
         nicknames_to += old_sender_nickname
         group_names_to = ""
         #set dates
-        send_date = convert_datestruct_to_datetext(time.localtime())
-        received_date = convert_datestruct_to_datetext(time.localtime())
+        send_date = datetime.strptime(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "%Y-%m-%d %H:%M:%S")
+        received_date = datetime.strptime(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "%Y-%m-%d %H:%M:%S")
+
         new_message = MsgMESSAGE(id_user_from=user_id, sent_to_user_nicks=nicknames_to,
                                  sent_to_group_names=group_names_to, subject=new_subject,
                                  body=new_body, sent_date=send_date, received_date=received_date)
@@ -228,8 +227,8 @@ class MsgMESSAGE(db.Model):
         nicknames_to = cfg['CFG_WEBMESSAGE_SEPARATOR'].join(nicknames_to_list)
         group_names_to = ""
         #set dates
-        send_date = convert_datestruct_to_datetext(time.localtime())
-        received_date = convert_datestruct_to_datetext(time.localtime())
+        send_date = datetime.strptime(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "%Y-%m-%d %H:%M:%S")
+        received_date = datetime.strptime(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "%Y-%m-%d %H:%M:%S")
 
         new_message = MsgMESSAGE(id_user_from=user_id, sent_to_user_nicks=nicknames_to,
                                  sent_to_group_names=group_names_to, subject=new_subject,
@@ -243,7 +242,6 @@ class MsgMESSAGE(db.Model):
 #from invenio.modules.messages.config import CFG_WEBMESSAGE_EMAIL_ALERT
 #from invenio.config import CFG_WEBCOMMENT_ALERT_ENGINE_EMAIL
 from invenio.utils.date import datetext_format
-from datetime import datetime
 
 
 def email_alert(mapper, connection, target):
