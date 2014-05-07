@@ -194,7 +194,7 @@ class MsgMESSAGE(db.Model):
                                  sent_to_group_names=group_names_to, subject=new_subject,
                                  body=new_body, sent_date=send_date, received_date=received_date)
         #send the new_message
-        new_message.send()
+        return new_message.send()
 
     def reply_to_all_users(self, reply_body, user_id=None):
         """Replies to the sender plus other users that have received this email

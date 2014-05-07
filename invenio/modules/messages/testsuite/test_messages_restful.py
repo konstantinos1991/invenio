@@ -266,3 +266,54 @@ class TestMessagesRestfulAPI(APITestCase):
             user_id=self.user_b.id,
             code=204,
         )
+
+    def test_reply_to_sender(self):
+        from invenio.modules.messages.models import MsgMESSAGE, UserMsgMESSAGE
+        #send a message from user_a to user_b
+        m_data = dict(
+            users_nicknames_to="user_b",
+            groups_names_to="",
+            subject="first message from user_a to user_b",
+            body="this is the first message from user_a to user_b",
+            sent_date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        )
+        answer_post = self.post(
+            'messageslistresource',
+            data=m_data,
+            user_id=self.user_a.id,
+            code=201,
+        )
+
+        #user_b replies to message
+        data_to_reply = dict(
+            reply_body="this is a reply to the message of user_a"
+        )
+        answer_put = self.put(
+            'messageresource',
+            urlargs=dict(message_id=int(answer_post.json['id'])),
+            data=data_to_reply,
+            user_id=self.user_b.id,
+            code=201,
+        )
+        print "Inside test_reply_to_sender"
+        print answer_put.json
+
+        #delete what has been created
+        try:
+            m_id = int(answer_post.json['id'])
+            um = UserMsgMESSAGE.query.filter(UserMsgMESSAGE.id_user_to == self.user_b.id,
+                                             UserMsgMESSAGE.id_msgMESSAGE == m_id).one()
+            db.session.delete(um)
+            m = MsgMESSAGE.query.filter(MsgMESSAGE.id == m_id).one()
+            db.session.delete(m)
+            db.session.commit()
+
+            m_id = int(answer_put.json['id'])
+            um = UserMsgMESSAGE.query.filter(UserMsgMESSAGE.id_user_to == self.user_a.id,
+                                             UserMsgMESSAGE.id_msgMESSAGE == m_id).one()
+            db.session.delete(um)
+            m = MsgMESSAGE.query.filter(MsgMESSAGE.id == m_id).one()
+            db.session.delete(m)
+            db.session.commit()
+        except Exception as e:
+            print e.args

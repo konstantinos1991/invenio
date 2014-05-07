@@ -111,6 +111,11 @@ create_message_post_schema = dict(
     sent_date=dict(type="string"),
 )
 
+#data schema when replying to a message
+reply_to_sender_put_schema = dict(
+    reply_body=dict(type="string"),
+)
+
 
 #The Resources
 class MessageResource(Resource):
@@ -165,14 +170,51 @@ class MessageResource(Resource):
         messagesAPI.delete_message_from_user_inbox(uid, message_id)
         return "", 204
 
+    @require_header('Content-Type', 'application/json')
     def put(self, oauth, message_id):
         """Replies to a message
 
         First it accepts the body that will be added to the body
         of the old message
         :param message_id: the id of the message to reply to
+        Returns:
+                the new message that was created
         """
-        pass
+        # initialize a Validator
+        replyToMessageValidator = Validator(reply_to_sender_put_schema)
+        #get the uploaded JSON data
+        json_data = request.get_json()
+        #validate JSON data
+        if replyToMessageValidator.validate(json_data) is False:
+            abort(400,
+                  message="Validation failed",
+                  status=400,
+                  errors=replyToMessageValidator.errors)
+        #get the user id
+        uid = int(current_user.get_id())
+        #get the message id to reply to
+        msg_id = int(message_id)
+        #the body of the niew message
+        reply_body = str(json_data['reply_body'].encode("utf-8"))
+        #sends the reply
+        new_message_id = messagesAPI.reply_to_sender(msg_id=msg_id,
+                                                     reply_body=reply_body, uid=uid)
+        #get the newly created message
+        new_message = messagesAPI.get_message(new_message_id)
+        #create a MessageObject to return
+        send_date_to_str = str(new_message.sent_date.strftime("%Y-%m-%d %H:%M:%S"))
+        received_date_to_str = str(new_message.received_date.strftime("%Y-%m-%d %H:%M:%S"))
+        message_object = MessageObject(id=int(new_message.id),
+                                       id_user_from=int(new_message.id_user_from),
+                                       nickname_user_from=str(new_message.user_from.nickname.encode("utf-8")),
+                                       sent_to_user_nicks=str(new_message._sent_to_user_nicks.encode("utf-8")),
+                                       sent_to_group_names=str(new_message._sent_to_group_names.encode("utf-8")),
+                                       subject=str(new_message.subject.encode("utf-8")),
+                                       body=str(new_message.body.encode("utf-8")),
+                                       sent_date=send_date_to_str,
+                                       received_date=received_date_to_str,
+                                       status=str(CFG_WEBMESSAGE_STATUS_CODE['NEW']))
+        return message_object.marshal(), 201
 
     def head(self, message_id):
         abort(405)
@@ -302,8 +344,6 @@ class MessagesListResource(Resource):
 #
 # Register API resources
 #
-
-#api = restful.Api(app=app)
 
 
 def setup_app(app, api):

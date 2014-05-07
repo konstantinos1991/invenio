@@ -405,31 +405,42 @@ def create_message(uid_from,
         raise errors.MessageNotCreatedError("Message could not be created")
 
 
-def send_message(uids_to, msgid, status=CFG_WEBMESSAGE_STATUS_CODE['NEW']):
-    """Send message to uids
+def reply_to_sender(msg_id, reply_body, uid):
+    """Replies back to sender
 
-    **REFACTORED
-    @param uids: sequence of user ids
-    @param msg_id: id of message
-    @param status: status of the message. (single char, see webmessage_config.py).
-    @returns: a list of users having their mailbox full
+    :param msg_id: the id of the message to which a user wants to reply to
+    :param reply_body: the body of the new message
+    :param uid: the id of the user that replies back
     """
-    if not((type(uids_to) is list) or (type(uids_to) is tuple)):
-        uids_to = [uids_to]
+    m = get_message(msg_id)
+    return m.reply_to_sender_only(reply_body=reply_body, user_id=uid)
 
-    users_with_full_mailbox = []
-    #find the people with full mailbox and exclude them from the list of recipients
-    for uid in uids_to:
-        if check_if_user_has_free_space(uid) is False:
-            users_with_full_mailbox.append(uid)
-            uids_to.delete(uid)
-    #send the message to the remaining recipients if there are any
-    if len(uids_to) > 0:
-        for uid in uids_to:
-            user_msg_rec = UserMsgMESSAGE(id_user_to=uid, id_msgMESSAGE=msgid, status=status)
-            db.session.add(user_msg_rec)
-        db.session.commit()
-    return users_with_full_mailbox
+
+# def send_message(uids_to, msgid, status=CFG_WEBMESSAGE_STATUS_CODE['NEW']):
+#     """Send message to uids
+
+#     **REFACTORED
+#     @param uids: sequence of user ids
+#     @param msg_id: id of message
+#     @param status: status of the message. (single char, see webmessage_config.py).
+#     @returns: a list of users having their mailbox full
+#     """
+#     if not((type(uids_to) is list) or (type(uids_to) is tuple)):
+#         uids_to = [uids_to]
+
+#     users_with_full_mailbox = []
+#     #find the people with full mailbox and exclude them from the list of recipients
+#     for uid in uids_to:
+#         if check_if_user_has_free_space(uid) is False:
+#             users_with_full_mailbox.append(uid)
+#             uids_to.delete(uid)
+#     #send the message to the remaining recipients if there are any
+#     if len(uids_to) > 0:
+#         for uid in uids_to:
+#             user_msg_rec = UserMsgMESSAGE(id_user_to=uid, id_msgMESSAGE=msgid, status=status)
+#             db.session.add(user_msg_rec)
+#         db.session.commit()
+#     return users_with_full_mailbox
 
 # def reply_to_message(uid, body_to_be_added, reply_msg_id):
 #     """
