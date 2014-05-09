@@ -39,9 +39,9 @@ from invenio.modules.messages.models import MsgMESSAGE, UserMsgMESSAGE
 from invenio.modules.accounts.models import User
 from invenio.modules.messages.util import filter_messages_from_user_with_status, filter_all_messages_from_user, \
     filter_user_message
-from invenio.modules.messages import errors
-# from invenio.modules.messages.errors import MessageNotFound, MessageNotDeleted, \
-#     MessagesNotFetchedError, MessageNotCreatedError
+#from invenio.modules.messages import errors
+from invenio.modules.messages.errors import MessageNotFoundError, MessageNotDeletedError, \
+    MessagesNotFetchedError, MessageNotCreatedError
 
 
 def check_user_owns_message(uid, msgid):
@@ -81,7 +81,7 @@ def get_message(msgid):
         return MsgMESSAGE.query.filter(MsgMESSAGE.id == int(msgid)).one()
     except Exception as e:
         print e.args
-        raise errors.MessageNotFound("Message cannot be found")
+        raise MessageNotFoundError("Message cannot be found")
 
 
 def get_message_from_user_inbox(uid, msgid):
@@ -101,7 +101,7 @@ def get_message_from_user_inbox(uid, msgid):
             filter(UserMsgMESSAGE.id_user_to == int(uid),
                    UserMsgMESSAGE.id_msgMESSAGE == int(msgid)).one()
     except Exception:
-        raise errors.MessageNotFound("Message cannot be found")
+        raise MessageNotFoundError("Message cannot be found")
 
 
 def set_message_status(uid, msgid, new_status):
@@ -195,7 +195,7 @@ def get_all_messages_for_user(uid):
         #     filter(filter_all_messages_from_user(uid)).\
         #     order_by(MsgMESSAGE.sent_date).all()
     except Exception:
-        raise errors.MessagesNotFetchedError("Could not fetch messages")
+        raise MessagesNotFetchedError("Could not fetch messages")
 
 
 def number_of_all_messages_in_inbox_of_user(uid):
@@ -223,7 +223,7 @@ def get_new_messages_for_user(uid):
                    UserMsgMESSAGE.status == NEW).\
             order_by(MsgMESSAGE.received_date).all()
     except Exception:
-        raise errors.MessagesNotFetchedError("Could not fetch new messages")
+        raise MessagesNotFetchedError("Could not fetch new messages")
 
 
 def number_of_new_messages_for_user(uid):
@@ -251,7 +251,7 @@ def get_the_read_messages_in_inbox_of_user(uid):
                    UserMsgMESSAGE.status == READ).\
             order_by(MsgMESSAGE.received_date).all()
     except Exception:
-        raise errors.MessagesNotFetchedError("Could not fetch the messages that are already read")
+        raise MessagesNotFetchedError("Could not fetch the messages that are already read")
 
 
 def number_of_read_messages_in_inbox_of_user(uid):
@@ -292,10 +292,10 @@ def delete_message_from_user_inbox(uid, msg_id):
             delete(synchronize_session=False)
         check_if_need_to_delete_message_permanently(msg_id)
         if res == 0:
-            raise errors.MessageNotDeleted("Message could not be deleted")
+            raise MessageNotDeletedError("Message could not be deleted")
         return res
     except Exception:
-        raise errors.MessageNotDeleted("Message could not be deleted")
+        raise MessageNotDeletedError("Message could not be deleted")
 
 
 def check_if_need_to_delete_message_permanently(msg_ids):
@@ -335,7 +335,7 @@ def delete_all_messages(uid):
             check_if_need_to_delete_message_permanently(msg_ids)
         return nb_messages
     except Exception:
-        raise errors.MessageNotDeleted("Error while deleting all messages")
+        raise MessageNotDeletedError("Error while deleting all messages")
 
 
 def check_if_user_has_free_space(uid):
@@ -394,6 +394,7 @@ def create_message(uid_from,
         # print "set subject"
         # m.body = db.String(msg_body)
         # print "set body"
+
         m = MsgMESSAGE(id_user_from=uid_from, sent_to_user_nicks=users_to_str,
                        sent_to_group_names=groups_to_str,
                        subject=msg_subject, body=msg_body,
@@ -402,7 +403,7 @@ def create_message(uid_from,
         return m.send()
     except Exception as e:
         print e.args
-        raise errors.MessageNotCreatedError("Message could not be created")
+        raise MessageNotCreatedError("Message could not be created")
 
 
 def reply_to_sender(msg_id, reply_body, uid):

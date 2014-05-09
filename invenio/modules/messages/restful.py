@@ -22,10 +22,12 @@ Restful api for the messages module.
 
 from flask.ext.restful import abort
 from flask.ext.restful import Resource
-from invenio.ext.restful import require_api_auth, require_header
+from invenio.ext.restful import require_api_auth, require_header,\
+    UTCISODateTime
 from flask.ext.restful import fields, marshal
 from flask.ext.login import current_user
-from datetime import datetime
+from dateutil import parser
+from dateutil.tz import tzlocal
 from functools import wraps
 #from flask import jsonify
 from flask import request
@@ -69,20 +71,13 @@ class MessageObject(object):
     It will be used only to return informations back to the client and
     it has no interaction with the database
     """
+    def __init__(self, givenMessage):
+        """ Initialize a message object
 
-    def __init__(self, id, id_user_from, nickname_user_from, sent_to_user_nicks, sent_to_group_names,
-                 subject, body, sent_date, received_date, status):
-        """Initialize a message object"""
-        self.id = id
-        self.id_user_from = id_user_from
-        self.nickname_user_from = nickname_user_from
-        self.sent_to_user_nicks = sent_to_user_nicks
-        self.sent_to_group_names = sent_to_group_names
-        self.subject = subject
-        self.body = body
-        self.send_date = sent_date
-        self.received_date = received_date
-        self.status = status
+        :param message: is a message of type MsgMESSAGE or UserMSgMESSAGE
+        """
+        #import needed models
+        from invenio.modules.messages.models import MsgMESSAGE
         #set the marshaling fields
         self.marshal_message_fields = dict(
             id=fields.Integer,
@@ -92,10 +87,36 @@ class MessageObject(object):
             sent_to_group_names=fields.String,
             subject=fields.String,
             body=fields.String,
-            sent_date=fields.String,
-            received_date=fields.String,
+            sent_date=UTCISODateTime,
+            received_date=UTCISODateTime,
             status=fields.String
         )
+        #parse the attributes of the given message
+        # import ipdb;
+        # ipdb.set_trace();
+
+        if isinstance(givenMessage, MsgMESSAGE):
+            self.id = givenMessage.id
+            self.id_user_from = givenMessage.id_user_from
+            self.nickname_user_from = givenMessage.user_from.nickname
+            self.sent_to_user_nicks = givenMessage._sent_to_user_nicks
+            self.sent_to_group_names = givenMessage._sent_to_group_names
+            self.subject = givenMessage.subject
+            self.body = givenMessage.body
+            self.sent_date = givenMessage.sent_date
+            self.received_date = givenMessage.received_date
+            self.status = CFG_WEBMESSAGE_STATUS_CODE['NEW']
+        else:   # givenMessage is of type UserMsgMESSAGE
+            self.id = givenMessage.id_msgMESSAGE
+            self.id_user_from = givenMessage.message.id_user_from
+            self.nickname_user_from = givenMessage.message.user_from.nickname
+            self.sent_to_user_nicks = givenMessage.message._sent_to_user_nicks
+            self.sent_to_group_names = givenMessage.message._sent_to_group_names
+            self.subject = givenMessage.message.subject
+            self.body = givenMessage.message.body
+            self.sent_date = givenMessage.message.sent_date
+            self.received_date = givenMessage.message.received_date
+            self.status = givenMessage.status
 
     def marshal(self):
         """ Packages the object to a dictionary(JSON) """
@@ -137,26 +158,7 @@ class MessageResource(Resource):
         """
         uid = current_user.get_id()
         requested_message = messagesAPI.get_message_from_user_inbox(uid, message_id)
-        #convert attributes to marshal the object correctly
-        m_id = int(requested_message.message.id)
-        id_user_from = int(requested_message.message.id_user_from)
-        nickname_user_from = str(requested_message.message.user_from.nickname.encode("utf-8"))
-        sent_to_user_nicks = str(requested_message.message._sent_to_user_nicks.encode("utf-8"))
-        sent_to_group_names = str(requested_message.message._sent_to_group_names.encode("utf-8"))
-        subject = str(requested_message.message.subject.encode("utf-8"))
-        body = str(requested_message.message.body.encode("utf-8"))
-        status = str(requested_message.status)
-        #convert the date-times to strings
-        sent_date = str(requested_message.message.sent_date.strftime("%Y-%m-%d %H:%M:%S"))
-        received_date = str(requested_message.message.received_date.strftime("%Y-%m-%d %H:%M:%S"))
-        #now create an instance of class MessageObject
-        message_object = MessageObject(id=m_id, id_user_from=id_user_from,
-                                       nickname_user_from=nickname_user_from,
-                                       sent_to_user_nicks=sent_to_user_nicks,
-                                       sent_to_group_names=sent_to_group_names,
-                                       subject=subject, body=body,
-                                       sent_date=sent_date, received_date=received_date,
-                                       status=status)
+        message_object = MessageObject(requested_message)
         return message_object.marshal()
 
     def delete(self, oauth, message_id):
@@ -195,25 +197,14 @@ class MessageResource(Resource):
         #get the message id to reply to
         msg_id = int(message_id)
         #the body of the niew message
-        reply_body = str(json_data['reply_body'].encode("utf-8"))
+        reply_body = json_data['reply_body']
         #sends the reply
         new_message_id = messagesAPI.reply_to_sender(msg_id=msg_id,
                                                      reply_body=reply_body, uid=uid)
         #get the newly created message
         new_message = messagesAPI.get_message(new_message_id)
         #create a MessageObject to return
-        send_date_to_str = str(new_message.sent_date.strftime("%Y-%m-%d %H:%M:%S"))
-        received_date_to_str = str(new_message.received_date.strftime("%Y-%m-%d %H:%M:%S"))
-        message_object = MessageObject(id=int(new_message.id),
-                                       id_user_from=int(new_message.id_user_from),
-                                       nickname_user_from=str(new_message.user_from.nickname.encode("utf-8")),
-                                       sent_to_user_nicks=str(new_message._sent_to_user_nicks.encode("utf-8")),
-                                       sent_to_group_names=str(new_message._sent_to_group_names.encode("utf-8")),
-                                       subject=str(new_message.subject.encode("utf-8")),
-                                       body=str(new_message.body.encode("utf-8")),
-                                       sent_date=send_date_to_str,
-                                       received_date=received_date_to_str,
-                                       status=str(CFG_WEBMESSAGE_STATUS_CODE['NEW']))
+        message_object = MessageObject(new_message)
         return message_object.marshal(), 201
 
     def head(self, message_id):
@@ -244,18 +235,7 @@ class MessagesListResource(Resource):
         user_messages_list = []     # a list that will hold the representations of the messages, i.e a list of MessageObject
         user_messages = messagesAPI.get_all_messages_for_user(uid)
         for m in user_messages:
-            converted_send_date = m.message.sent_date.strftime("%Y-%m-%d %H:%M:%S")
-            converted_received_date = m.message.received_date.strftime("%Y-%m-%d %H:%M:%S")
-            message_object = MessageObject(id=int(m.id_msgMESSAGE),
-                                           id_user_from=int(m.message.id_user_from),
-                                           nickname_user_from=str(m.message.user_from.nickname.encode("utf-8")),
-                                           sent_to_user_nicks=str(m.message._sent_to_user_nicks.encode("utf-8")),
-                                           sent_to_group_names=str(m.message._sent_to_group_names.encode("utf-8")),
-                                           subject=str(m.message.subject.encode("utf-8")),
-                                           body=str(m.message.body.encode("utf-8")),
-                                           sent_date=str(converted_send_date),
-                                           received_date=str(converted_received_date),
-                                           status=str(m.status))
+            message_object = MessageObject(m)
             user_messages_list.append(message_object)
         return map(lambda o: o.marshal(), user_messages_list)
 
@@ -294,14 +274,17 @@ class MessagesListResource(Resource):
                   status=400,
                   errors=createMessageValidator.errors)
 
-        #convert unicodes to string
         uid = int(uid)
-        users_nicknames_to_str = json_data['users_nicknames_to'].encode("utf-8")
-        groups_names_to_str = json_data['groups_names_to'].encode("utf-8")
-        subject_str = json_data['subject'].encode("utf-8")
-        body_str = json_data['body'].encode("utf-8")
-        sent_date_str = json_data['sent_date'].encode("utf-8")
-        sent_date_db_datetime_object = datetime.strptime(sent_date_str, "%Y-%m-%d %H:%M:%S")
+        users_nicknames_to_str = json_data['users_nicknames_to']
+        groups_names_to_str = json_data['groups_names_to']
+        subject_str = json_data['subject']
+        body_str = json_data['body']
+        given_datetime_utc_iso_str = json_data['sent_date']
+        #convert the given date-time utc-iso string to a datetime object
+        dt = parser.parse(given_datetime_utc_iso_str)
+        if dt.tzinfo:
+            dt = dt.astimezone(tzlocal())
+        dt = dt.replace(tzinfo=None)
 
         created_message_id = \
             messagesAPI.create_message(uid_from=uid,
@@ -309,24 +292,10 @@ class MessagesListResource(Resource):
                                        groups_to_str=groups_names_to_str,
                                        msg_subject=subject_str,
                                        msg_body=body_str,
-                                       msg_send_on_date=sent_date_db_datetime_object)
+                                       msg_send_on_date=dt)
 
         created_message = messagesAPI.get_message(created_message_id)
-
-        #convert dates from the database
-        converted_send_date = created_message.sent_date.strftime("%Y-%m-%d %H:%M:%S")       # string send_date
-        converted_received_date = created_message.received_date.strftime("%Y-%m-%d %H:%M:%S")       # string received_date
-
-        message_object = MessageObject(id=int(created_message.id),
-                                       id_user_from=int(created_message.id_user_from),
-                                       nickname_user_from=str(created_message.user_from.nickname.encode("utf-8")),
-                                       sent_to_user_nicks=str(created_message._sent_to_user_nicks.encode("utf-8")),
-                                       sent_to_group_names=str(created_message._sent_to_group_names.encode("utf-8")),
-                                       subject=str(created_message.subject.encode("utf-8")),
-                                       body=str(created_message.body.encode("utf-8")),
-                                       sent_date=str(converted_send_date),
-                                       received_date=str(converted_received_date),
-                                       status=str(CFG_WEBMESSAGE_STATUS_CODE['NEW']))
+        message_object = MessageObject(created_message)
         return message_object.marshal(), 201
 
     def head(self, oauth):

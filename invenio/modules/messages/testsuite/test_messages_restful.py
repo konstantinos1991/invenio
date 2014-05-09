@@ -25,7 +25,9 @@ for the the restful api that concerns messages
 
 from invenio.ext.restful.utils import APITestCase
 from invenio.ext.sqlalchemy import db
+#for the the utc-iso date-time format
 from datetime import datetime
+from dateutil.tz import tzutc
 
 
 class TestMessagesRestfulAPI(APITestCase):
@@ -77,7 +79,7 @@ class TestMessagesRestfulAPI(APITestCase):
             groups_names_to="",
             subject="first message from user_a to user_b",
             body="this is the first message from user_a to user_b",
-            sent_date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            sent_date=datetime.now(tzutc()).isoformat()
         )
         answer = self.post(
             'messageslistresource',
@@ -105,7 +107,7 @@ class TestMessagesRestfulAPI(APITestCase):
             groups_names_to=1,
             subject="first message from user_a to user_b",
             body="this is the first message from user_a to user_b",
-            sent_date='1900-01-01 00:00:00',
+            sent_date=datetime.now(tzutc()).isoformat(),
         )
         answer = self.post(
             'messageslistresource',
@@ -124,7 +126,7 @@ class TestMessagesRestfulAPI(APITestCase):
             groups_names_to="",
             subject="first message from user_a to user_b",
             body="this is the first message from user_a to user_b",
-            sent_date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            sent_date=datetime.now(tzutc()).isoformat(),
         )
         answer1 = self.post(
             'messageslistresource',
@@ -138,7 +140,7 @@ class TestMessagesRestfulAPI(APITestCase):
             groups_names_to="",
             subject="second message from user_a to user_b",
             body="this is the second message from user_a to user_b",
-            sent_date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            sent_date=datetime.now(tzutc()).isoformat(),
         )
         answer2 = self.post(
             'messageslistresource',
@@ -180,7 +182,7 @@ class TestMessagesRestfulAPI(APITestCase):
             groups_names_to="",
             subject="first message from user_a to user_b",
             body="this is the first message from user_a to user_b",
-            sent_date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            sent_date=datetime.now(tzutc()).isoformat(),
         )
         self.post(
             'messageslistresource',
@@ -194,7 +196,7 @@ class TestMessagesRestfulAPI(APITestCase):
             groups_names_to="",
             subject="second message from user_a to user_b",
             body="this is the second message from user_a to user_b",
-            sent_date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            sent_date=datetime.now(tzutc()).isoformat(),
         )
         self.post(
             'messageslistresource',
@@ -216,7 +218,7 @@ class TestMessagesRestfulAPI(APITestCase):
             groups_names_to="",
             subject="first message from user_a to user_b",
             body="this is the first message from user_a to user_b",
-            sent_date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            sent_date=datetime.now(tzutc()).isoformat(),
         )
         answer_post = self.post(
             'messageslistresource',
@@ -252,7 +254,7 @@ class TestMessagesRestfulAPI(APITestCase):
             groups_names_to="",
             subject="first message from user_a to user_b",
             body="this is the first message from user_a to user_b",
-            sent_date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            sent_date=datetime.now(tzutc()).isoformat(),
         )
         answer_post = self.post(
             'messageslistresource',
@@ -275,7 +277,7 @@ class TestMessagesRestfulAPI(APITestCase):
             groups_names_to="",
             subject="first message from user_a to user_b",
             body="this is the first message from user_a to user_b",
-            sent_date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            sent_date=datetime.now(tzutc()).isoformat(),
         )
         answer_post = self.post(
             'messageslistresource',

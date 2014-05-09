@@ -22,6 +22,8 @@ WebMessage database models.
 """
 
 from datetime import datetime
+from dateutil.tz import tzlocal, tzutc
+from dateutil import parser
 # General imports
 from invenio.base.globals import cfg
 from invenio.ext.sqlalchemy import db
@@ -158,11 +160,15 @@ class MsgMESSAGE(db.Model):
         """Sends this message to the recipients that are set.
         :return the id of the message
         """
+        # import ipdb;
+        # ipdb.set_trace();
+
         try:
             db.session.add(self)
             db.session.commit()
             return self.id
-        except Exception:
+        except Exception as e:
+            print e.args
             db.session.rollback()
 
     def reply_to_sender_only(self, reply_body, user_id=None):
@@ -187,12 +193,17 @@ class MsgMESSAGE(db.Model):
         nicknames_to += old_sender_nickname
         group_names_to = ""
         #set dates
-        send_date = datetime.strptime(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "%Y-%m-%d %H:%M:%S")
-        received_date = datetime.strptime(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "%Y-%m-%d %H:%M:%S")
+        date_utc_iso_str = datetime.now(tzutc()).isoformat()
+        dt = parser.parse(date_utc_iso_str)
+        if dt.tzinfo:
+            dt = dt.astimezone(tzlocal())
+        dt = dt.replace(tzinfo=None)
+        # send_date = datetime.strptime(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "%Y-%m-%d %H:%M:%S")
+        # received_date = datetime.strptime(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "%Y-%m-%d %H:%M:%S")
 
         new_message = MsgMESSAGE(id_user_from=user_id, sent_to_user_nicks=nicknames_to,
                                  sent_to_group_names=group_names_to, subject=new_subject,
-                                 body=new_body, sent_date=send_date, received_date=received_date)
+                                 body=new_body, sent_date=dt, received_date=dt)
         #send the new_message
         return new_message.send()
 
@@ -227,12 +238,17 @@ class MsgMESSAGE(db.Model):
         nicknames_to = cfg['CFG_WEBMESSAGE_SEPARATOR'].join(nicknames_to_list)
         group_names_to = ""
         #set dates
-        send_date = datetime.strptime(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "%Y-%m-%d %H:%M:%S")
-        received_date = datetime.strptime(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "%Y-%m-%d %H:%M:%S")
+        date_utc_iso_str = datetime.now(tzutc()).isoformat()
+        dt = parser.parse(date_utc_iso_str)
+        if dt.tzinfo:
+            dt = dt.astimezone(tzlocal())
+        dt = dt.replace(tzinfo=None)
+        # send_date = datetime.strptime(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "%Y-%m-%d %H:%M:%S")
+        # received_date = datetime.strptime(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "%Y-%m-%d %H:%M:%S")
 
         new_message = MsgMESSAGE(id_user_from=user_id, sent_to_user_nicks=nicknames_to,
                                  sent_to_group_names=group_names_to, subject=new_subject,
-                                 body=new_body, sent_date=send_date, received_date=received_date)
+                                 body=new_body, sent_date=dt, received_date=dt)
         #send the new_message
         new_message.send()
 
