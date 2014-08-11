@@ -20,6 +20,7 @@
 """Tests for communities views."""
 
 from flask import url_for
+from invenio.base.globals import cfg
 from invenio.testsuite import InvenioTestCase, make_test_suite, run_test_suite
 
 
@@ -42,7 +43,8 @@ class CommunitiesViewTest(InvenioTestCase):
     def test_new_community_page_unauthorized(self):
         """communities - new communities restricted to logged in users"""
         response = self.client.get(url_for('communities.new'),
-                                   follow_redirects=True)
+                                   follow_redirects=True,
+                                   base_url=cfg['CFG_SITE_SECURE_URL'])
         self.assert401(response)
 
 
